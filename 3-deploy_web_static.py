@@ -1,100 +1,49 @@
 #!/usr/bin/python3
-# This fabscript deploys the web static content
-from os import path
-from fabric.api import sudo, env, put, local
-from datetime import datetime
-
-# Production hosts
-env.hosts = ["54.158.45.251", "100.24.7.183"]
-
-# Test hosts
-# env.hosts = ["127.0.0.1"]
+"""Module that contains do_pack, do_deploy and deploy functions."""
+from fabric.api import local, env, put, run
+from time import strftime
+import os.path
+env.hosts = ['54.160.217.25', '3.87.244.249']
 
 
 def do_pack():
-        now = datetime.utcnow()
-        file_ = "versions/web_static_{}{}{}{}{}{}.tgz".format(now.year,
-                                                              now.month,
-                                                              now.day,
-                                                              now.hour,
-                                                              now.minute,
-                                                              now.second)
-
-        if not path.isdir("versions"):
-                if local("mkdir -p versions").failed:
-                        return None
-        if local('tar -cvzf {} web_static'.format(file_)).failed:
-                return None
-        return file_
+    """Generate .tgz archive of web_static/ folder."""
+    timenow = strftime("%Y%M%d%H%M%S")
+    try:
+        local("mkdir -p versions")
+        f_name = "versions/web_static_{}.tgz".format(timenow)
+        local("tar -cvzf {} web_static/".format(f_name))
+        return f_name
+    except:
+        return None
 
 
 def do_deploy(archive_path):
-    """
-    send and configure the web static content
-    """
-    # Assure that given parameter is a file
-    if not path.isfile(archive_path):
-            return False
-
-    # Paths variables
-    file_ = archive_path.split("/")[-1]
-    name = file_.split(".")[0]
-    tmp = "/tmp/{}".format(file_)
-    data = "/data/web_static/releases/{}/".format(name)
-    current = "/data/web_static/current"
-
-    # Send web server configuration
-    if put("0-setup_web_static.sh", "/tmp/").failed:
-            return False
-    # Give execution permissions
-    if sudo("chmod u+x /tmp/0-setup_web_static.sh").failed:
-            return False
-    # Execute script
-    if sudo("/tmp/0-setup_web_static.sh").failed:
-            return False
-    # Removes the script
-    if sudo("rm /tmp/0-setup_web_static.sh").failed:
-            return False
-    # Send compressed file
-    if put(archive_path, tmp).failed:
-            return False
-    # Remove a previous release
-    if sudo("rm -rf {}".format(data)).failed:
-            return False
-    # Create a directorty to allocate the new release
-    if sudo("mkdir -p {}".format(data)).failed:
-            return False
-    # Uncompress archive
-    if sudo("tar -xzf {} -C {}".format(tmp, data)).failed:
-            return False
-    # Remove compressed archive
-    if sudo("rm {}".format(tmp)).failed:
-            return False
-    # Move uncomprresed data of web static to the release folder
-    if sudo("mv {}web_static/* {}".format(data, data)).failed:
-            return False
-    # Remove uncompressed data from sistem
-    if sudo("rm -rf {}web_static".format(data)).failed:
-            return False
-    # Remove previous link to web static content
-    if sudo("rm -rf {}".format(current)).failed:
-            return False
-    # Create a new link to the new release content
-    if sudo("ln -s {} {}".format(data, current)).failed:
-            return False
-    # Finish the deploy!
-    print("New version deployed!")
-
-    return True
+    """Distributes archive to my web servers."""
+    if os.path.isfile(archive_path) is False:
+        return False
+    try:
+        f_name = archive_path.split("/")[-1]
+        no_ext = f_name.split(".")[0]
+        path_no_ext = "/data/web_static/releases/{}/".format(no_ext)
+        symlink = "/data/web_static/current"
+        put(archive_path, "/tmp/")
+        run("mkdir -p {}".format(path_no_ext))
+        run("tar -xzf /tmp/{} -C {}".format(f_name, path_no_ext))
+        run("rm /tmp/{}".format(f_name))
+        run("mv {}web_static/* {}".format(path_no_ext, path_no_ext))
+        run("rm -rf {}web_static".format(path_no_ext))
+        run("rm -rf {}".format(symlink))
+        run("ln -s {} {}".format(path_no_ext, symlink))
+        return True
+    except:
+        return False
 
 
 def deploy():
-    """
-    This function do a full deployment
-    """
+    """Creates and distributes an archive."""
     archive_path = do_pack()
-
-    if not archive_path:
+    if archive_path is None:
         return False
-
-    return do_deploy(archive_path)
+    success = do_deploy(archive_path)
+    return success

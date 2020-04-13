@@ -5,7 +5,7 @@ from datetime import datetime
 import os
 
 env.user = 'ubuntu'
-env.hosts = ['54.160.217.25', '3.87.244.249']
+env.hosts = ['35.196.255.156', '52.73.207.89']
 
 
 def do_deploy(archive_path):
